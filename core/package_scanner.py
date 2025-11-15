@@ -5,7 +5,8 @@ import re
 import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Iterable, List, Sequence, Tuple
+from pathlib import Path
+from typing import Iterable, List, Sequence, Tuple, Set
 
 from .models import PackageRecord, CategorizedPackage
 
@@ -20,6 +21,13 @@ BLACKLIST_SECTIONS_DEFAULT: Tuple[str, ...] = (
     "oldlibs",
     "debug",
 )
+
+# Standard .desktop file locations
+DESKTOP_PATHS = [
+    "/usr/share/applications/",
+    "/usr/local/share/applications/",
+    Path.home() / ".local/share/applications/",
+]
 
 
 class PackageScanner:
@@ -92,13 +100,28 @@ class PackageScanner:
     def _check_desktop_files(self, pkg: PackageRecord) -> CategorizedPackage:
         # Use dpkg -L to list files owned by the package
         proc = self._run(f"dpkg -L {shlex.quote(pkg.name)}")
-        if proc.returncode != 0:
-            return CategorizedPackage(package=pkg, has_desktop=False, desktop_files=[])
         desktop_files: List[str] = []
-        for line in proc.stdout.splitlines():
-            p = line.strip()
-            if p.endswith(".desktop"):
-                desktop_files.append(p)
+        
+        if proc.returncode == 0:
+            for line in proc.stdout.splitlines():
+                p = line.strip()
+                if p.endswith(".desktop") and os.path.isfile(p):
+                    desktop_files.append(p)
+        
+        # Also search in standard .desktop locations by name
+        # This helps find apps that have .desktop files not tracked by dpkg
+        for desktop_dir in DESKTOP_PATHS:
+            desktop_dir = Path(desktop_dir)
+            if not desktop_dir.exists():
+                continue
+            
+            # Look for .desktop files that might belong to this package
+            # Common patterns: packagename.desktop, packagename-*.desktop
+            for pattern in [f"{pkg.name}.desktop", f"{pkg.name}-*.desktop"]:
+                for df in desktop_dir.glob(pattern):
+                    if df.is_file() and str(df) not in desktop_files:
+                        desktop_files.append(str(df))
+        
         has_desktop = len(desktop_files) > 0
 
         terminal_flag = None
@@ -127,9 +150,66 @@ class PackageScanner:
         all_records = self._bulk_query_packages()
         return self._filter_non_apps(all_records)
 
+    def _get_standalone_desktop_apps(self) -> List[CategorizedPackage]:
+        """Find .desktop files that are not associated with dpkg packages"""
+        standalone: List[CategorizedPackage] = []
+        seen_desktop_files: Set[str] = set()
+        
+        # Collect all .desktop files from standard locations
+        for desktop_dir in DESKTOP_PATHS:
+            desktop_dir = Path(desktop_dir)
+            if not desktop_dir.exists():
+                continue
+            
+            for desktop_file in desktop_dir.glob("*.desktop"):
+                if not desktop_file.is_file():
+                    continue
+                
+                desktop_path = str(desktop_file)
+                if desktop_path in seen_desktop_files:
+                    continue
+                seen_desktop_files.add(desktop_path)
+                
+                # Try to extract app name from .desktop file
+                try:
+                    app_name = None
+                    terminal_flag = False
+                    
+                    with open(desktop_file, "r", encoding="utf-8", errors="ignore") as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if line.startswith("Name="):
+                                app_name = line.split("=", 1)[1].strip()
+                            elif line.lower().startswith("terminal="):
+                                terminal_flag = line.split("=", 1)[1].strip().lower() == "true"
+                            
+                            if app_name:  # Got what we need
+                                break
+                    
+                    if not app_name:
+                        app_name = desktop_file.stem  # Use filename without .desktop
+                    
+                    # Create a pseudo package record
+                    pkg = PackageRecord(name=app_name, section="standalone")
+                    cat = CategorizedPackage(
+                        package=pkg,
+                        has_desktop=True,
+                        desktop_files=[desktop_path],
+                        terminal_desktop=terminal_flag,
+                    )
+                    standalone.append(cat)
+                    
+                except Exception:
+                    continue
+        
+        return standalone
+
     def categorize(self, packages: Sequence[PackageRecord]) -> Tuple[List[CategorizedPackage], List[CategorizedPackage]]:
         desktop: List[CategorizedPackage] = []
         cli: List[CategorizedPackage] = []
+        
+        # Track which .desktop files are already associated with packages
+        tracked_desktop_files: Set[str] = set()
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             futures = {pool.submit(self._check_desktop_files, p): p for p in packages}
@@ -137,8 +217,15 @@ class PackageScanner:
                 cat = fut.result()
                 if cat.has_desktop:
                     desktop.append(cat)
+                    tracked_desktop_files.update(cat.desktop_files)
                 else:
                     cli.append(cat)
+        
+        # Add standalone .desktop apps that aren't tracked by dpkg
+        for standalone_app in self._get_standalone_desktop_apps():
+            # Check if this .desktop file is already tracked
+            if not any(df in tracked_desktop_files for df in standalone_app.desktop_files):
+                desktop.append(standalone_app)
 
         # Sort for stable output
         desktop.sort(key=lambda c: c.package.name)
