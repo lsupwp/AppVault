@@ -1,6 +1,6 @@
 # AppVault
 
-A modern, user-friendly Linux application manager with a sleek dark theme interface. AppVault provides a centralized way to view, launch, and manage applications from multiple package sources including APT/DPKG packages, Flatpak, and Snap.
+A modern, user-friendly application manager for Ubuntu-based Linux distributions with a sleek dark theme interface. AppVault provides a centralized way to view, launch, and manage applications from multiple sources including APT/DPKG packages, Flatpak, and Snap.
 
 ![AppVault Logo](public/images/AppVault_Logo.png)
 
@@ -34,10 +34,12 @@ The main window shows all installed applications organized by tabs:
 
 - Python 3.9 or higher
 - PySide6 (Qt for Python)
-- Linux system with:
-  - APT/DPKG package manager (Debian/Ubuntu-based)
-  - Optional: Flatpak
-  - Optional: Snap
+- Ubuntu-based system with:
+   - APT/DPKG package manager (Ubuntu and derivatives)
+   - Optional: Flatpak
+   - Optional: Snap
+
+Note: AppVault currently supports Ubuntu-based distributions only (e.g., Ubuntu 22.04/24.04, Linux Mint, Pop!_OS, Zorin OS). Other distributions are not supported at this time.
 
 ## Installation
 
@@ -225,19 +227,19 @@ python3 app.py
 
 ### Package Detection
 
-AppVault scans multiple sources:
+AppVault scans multiple sources on Ubuntu-based systems:
 
-1. **APT/DPKG Packages**
-   - Reads `/var/lib/dpkg/status` for installed packages
-   - Searches `/usr/share/applications/` for .desktop files
+1. **APT/DPKG Packages** (Ubuntu family)
+   - Reads dpkg metadata for installed packages
+   - Searches common application directories for `.desktop` files (including user-local)
    - Categorizes as Desktop or CLI applications
 
-2. **Flatpak Applications**
+2. **Flatpak Applications** (optional)
    - Uses `flatpak list` command
    - Retrieves application metadata
    - Supports both user and system installations
 
-3. **Snap Packages**
+3. **Snap Packages** (optional)
    - Uses `snap list` command
    - Parses snap information and metadata
 
@@ -249,7 +251,7 @@ AppVault scans multiple sources:
 
 ### Application Removal
 
-- APT packages: Uses `pkexec apt-get autoremove --purge`
+- APT packages (Ubuntu-based): Uses `pkexec apt-get autoremove --purge`
 - Flatpak: Uses `flatpak uninstall --delete-data`
 - Snap: Uses `pkexec snap remove --purge`
 
@@ -258,7 +260,7 @@ All removals require user confirmation and proper authorization.
 ## Troubleshooting
 
 ### AppVault doesn't show all applications
-- Ensure you have permissions to read package databases
+- Ensure you have permissions to read package databases (Ubuntu-based)
 - Try refreshing with F5
 - Check if Flatpak/Snap are installed if those tabs are empty
 

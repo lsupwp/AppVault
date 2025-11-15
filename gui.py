@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import List, Tuple, Optional
 
 from PySide6.QtCore import Qt, QThread, Signal, QSize
@@ -27,6 +28,15 @@ from core.package_scanner import PackageScanner
 from core.models import CategorizedPackage
 from core.flatpak_scanner import FlatpakScanner, FlatpakApp
 from core.snap_scanner import SnapScanner, SnapApp
+
+
+def resource_path(*rel_parts: str) -> str:
+    """Return absolute path to resource, works for dev and PyInstaller."""
+    base = getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
+    return str(Path(base).joinpath(*rel_parts))
+
+
+LOGO_PATH = resource_path("public", "images", "AppVault_Logo.png")
 
 
 class ScanWorker(QThread):
@@ -111,7 +121,7 @@ class MainWindow(QMainWindow):
         self.resize(1100, 700)
         
         # Set window icon
-        logo_path = "/home/nanthaphat/Work/ControlAppLinux/public/images/AppVault_Logo.png"
+        logo_path = LOGO_PATH
         if QIcon(logo_path).isNull():
             # Fallback to default icon if logo not found
             self.setWindowIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
@@ -146,8 +156,7 @@ class MainWindow(QMainWindow):
         self.icon_label = QLabel()
         self.icon_label.setFixedSize(72, 72)
         # Set AppVault logo as default
-        logo_path = "/home/nanthaphat/Work/ControlAppLinux/public/images/AppVault_Logo.png"
-        logo_icon = QIcon(logo_path)
+        logo_icon = QIcon(LOGO_PATH)
         if not logo_icon.isNull():
             self.icon_label.setPixmap(logo_icon.pixmap(72, 72))
         else:
@@ -241,8 +250,7 @@ class MainWindow(QMainWindow):
         # Clear detail pane
         self.title_label.setText("Select an app to see details.")
         # Restore AppVault logo
-        logo_path = "/home/nanthaphat/Work/ControlAppLinux/public/images/AppVault_Logo.png"
-        logo_icon = QIcon(logo_path)
+        logo_icon = QIcon(LOGO_PATH)
         if not logo_icon.isNull():
             self.icon_label.setPixmap(logo_icon.pixmap(72, 72))
         else:
@@ -299,8 +307,7 @@ class MainWindow(QMainWindow):
         if not it:
             self.title_label.setText("Select an app to see details.")
             # Restore AppVault logo
-            logo_path = "/home/nanthaphat/Work/ControlAppLinux/public/images/AppVault_Logo.png"
-            logo_icon = QIcon(logo_path)
+            logo_icon = QIcon(LOGO_PATH)
             if not logo_icon.isNull():
                 self.icon_label.setPixmap(logo_icon.pixmap(72, 72))
             else:
